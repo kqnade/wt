@@ -400,9 +400,13 @@ _wt_copy() {
   base="$(_wt_base)"          || return 1
   wt_path="$(realpath "$(pwd)")"
 
-  local src
+  local src abs_src
   for src in "$@"; do
-    local abs_src="${base}/${src}"
+    abs_src="$(realpath "${base}/${src}" 2>/dev/null)" \
+      || { printf 'error: cannot resolve path: %s\n' "$src" >&2; continue; }
+    if [[ "$abs_src" != "$base" && "$abs_src" != "${base}/"* ]]; then
+      printf 'error: path escapes base repo: %s\n' "$src" >&2; continue
+    fi
     if [[ ! -e "$abs_src" ]]; then
       printf 'error: not found in base repo: %s\n' "$src" >&2; continue
     fi
@@ -424,9 +428,13 @@ _wt_link() {
   base="$(_wt_base)"          || return 1
   wt_path="$(realpath "$(pwd)")"
 
-  local src
+  local src abs_src
   for src in "$@"; do
-    local abs_src="${base}/${src}"
+    abs_src="$(realpath "${base}/${src}" 2>/dev/null)" \
+      || { printf 'error: cannot resolve path: %s\n' "$src" >&2; continue; }
+    if [[ "$abs_src" != "$base" && "$abs_src" != "${base}/"* ]]; then
+      printf 'error: path escapes base repo: %s\n' "$src" >&2; continue
+    fi
     if [[ ! -e "$abs_src" ]]; then
       printf 'error: not found in base repo: %s\n' "$src" >&2; continue
     fi
