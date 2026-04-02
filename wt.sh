@@ -342,6 +342,54 @@ _wt_extract() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# wt copy
+# ─────────────────────────────────────────────────────────────────────────────
+_wt_copy() {
+  _wt_require_git      || return 1
+  _wt_require_worktree || return 1
+  [[ $# -gt 0 ]] || { printf 'usage: wt copy <path> [...]\n' >&2; return 1; }
+
+  local base wt_path
+  base="$(_wt_base)"          || return 1
+  wt_path="$(realpath "$(pwd)")"
+
+  local src
+  for src in "$@"; do
+    local abs_src="${base}/${src}"
+    if [[ ! -e "$abs_src" ]]; then
+      printf 'error: not found in base repo: %s\n' "$src" >&2; continue
+    fi
+    cp -r "$abs_src" "${wt_path}/${src}" \
+      && printf '✓ copied: %s\n' "$src" \
+      || printf 'error: failed to copy: %s\n' "$src" >&2
+  done
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# wt link
+# ─────────────────────────────────────────────────────────────────────────────
+_wt_link() {
+  _wt_require_git      || return 1
+  _wt_require_worktree || return 1
+  [[ $# -gt 0 ]] || { printf 'usage: wt link <path> [...]\n' >&2; return 1; }
+
+  local base wt_path
+  base="$(_wt_base)"          || return 1
+  wt_path="$(realpath "$(pwd)")"
+
+  local src
+  for src in "$@"; do
+    local abs_src="${base}/${src}"
+    if [[ ! -e "$abs_src" ]]; then
+      printf 'error: not found in base repo: %s\n' "$src" >&2; continue
+    fi
+    ln -sf "$abs_src" "${wt_path}/${src}" \
+      && printf '✓ linked: %s → %s\n' "$src" "$abs_src" \
+      || printf 'error: failed to link: %s\n' "$src" >&2
+  done
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
 wt() {
@@ -356,6 +404,8 @@ wt() {
     home)    _wt_home    "$@" ;;
     use)     _wt_use     "$@" ;;
     extract) _wt_extract "$@" ;;
+    copy)    _wt_copy    "$@" ;;
+    link)    _wt_link    "$@" ;;
     *)
       printf '%s\n' \
         "usage: wt <command> [args]" \
