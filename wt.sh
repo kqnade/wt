@@ -145,6 +145,64 @@ _wt_new() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# wt cd
+# ─────────────────────────────────────────────────────────────────────────────
+_wt_cd() {
+  _wt_require_git || return 1
+
+  local target="${1:-}"
+
+  if [[ -z "$target" ]]; then
+    # Interactive: fzf
+    command -v fzf > /dev/null 2>&1 \
+      || { printf 'error: fzf is required for interactive selection\n' >&2; return 1; }
+    local selected
+    selected="$(_wt_ls --full-path | fzf --prompt='worktree> ')"
+    [[ -z "$selected" ]] && return 0
+    builtin cd "${selected%% *}"
+  else
+    # 3-stage matching: exact → single prefix → multiple prefix (error)
+    local -a paths=()
+    local line
+    while IFS= read -r line; do
+      paths+=("${line%% *}")
+    done < <(_wt_ls --full-path)
+
+    local exact_match=""
+    local -a prefix_matches=()
+    local p name
+
+    for p in "${paths[@]}"; do
+      name="$(basename "$p")"
+      [[ "$name" == *@* ]] && name="${name#*@}"
+      if [[ "$name" == "$target" ]]; then
+        exact_match="$p"
+        break
+      elif [[ "$name" == "$target"* ]]; then
+        prefix_matches+=("$p")
+      fi
+    done
+
+    if [[ -n "$exact_match" ]]; then
+      builtin cd "$exact_match"
+    elif (( ${#prefix_matches[@]} == 1 )); then
+      builtin cd "${prefix_matches[0]}"
+    elif (( ${#prefix_matches[@]} > 1 )); then
+      printf 'error: ambiguous match for %q — candidates:\n' "$target" >&2
+      for p in "${prefix_matches[@]}"; do
+        name="$(basename "$p")"
+        [[ "$name" == *@* ]] && name="${name#*@}"
+        printf '  %s\n' "$name" >&2
+      done
+      return 1
+    else
+      printf 'error: no worktree matching %q\n' "$target" >&2
+      return 1
+    fi
+  fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
 wt() {
@@ -154,6 +212,7 @@ wt() {
   case "$cmd" in
     new)     _wt_new     "$@" ;;
     ls)      _wt_ls      "$@" ;;
+    cd)      _wt_cd      "$@" ;;
     *)
       printf '%s\n' \
         "usage: wt <command> [args]" \
