@@ -136,6 +136,8 @@ wt extract
 - ベースをデフォルトブランチに戻す
   - デフォルトブランチの取得: `git symbolic-ref refs/remotes/origin/HEAD | sed 's|refs/remotes/origin/||'`
   - origin が未設定の場合は `wt.default-branch` 設定にフォールバック、それもなければエラー
+- `post-new` フックを実行する。`pre-new` フック・AI 自動起動は**実行しない**
+  - ブランチはすでに存在し作業途中の状態であるため、新規作成時と異なりキャンセル用 guard や AI 起動は不要
 
 ### `wt clean [--dry-run]`
 
