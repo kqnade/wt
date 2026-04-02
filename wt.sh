@@ -326,8 +326,7 @@ _wt_use() {
   local base
   base="$(_wt_base)" || return 1
 
-  if ! git -C "$base" diff --quiet 2>/dev/null \
-    || ! git -C "$base" diff --cached --quiet 2>/dev/null; then
+  if [[ -n "$(git -C "$base" status --porcelain 2>/dev/null)" ]]; then
     printf 'error: base repository has uncommitted changes; stash or commit first\n' >&2
     return 1
   fi
@@ -346,8 +345,7 @@ _wt_extract() {
   fi
 
   # dirty check before the two-step operation (wt new → git checkout default)
-  if ! git diff --quiet 2>/dev/null \
-    || ! git diff --cached --quiet 2>/dev/null; then
+  if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
     printf 'error: base repository has uncommitted changes; stash or commit first\n' >&2
     return 1
   fi
