@@ -451,6 +451,9 @@ _wt_invoke() {
   _wt_require_git || return 1
   local hook="${1:-}"
   [[ -n "$hook" ]] || { printf 'usage: wt invoke <hook>\n' >&2; return 1; }
+  # Reject names containing / to prevent running binaries outside .wt/hooks/
+  [[ "$hook" != */* ]] \
+    || { printf 'error: hook name must not contain /: %s\n' "$hook" >&2; return 1; }
 
   local base
   base="$(_wt_base)" || return 1
