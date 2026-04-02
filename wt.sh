@@ -390,6 +390,32 @@ _wt_link() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# wt invoke
+# ─────────────────────────────────────────────────────────────────────────────
+_wt_invoke() {
+  _wt_require_git || return 1
+  local hook="${1:-}"
+  [[ -n "$hook" ]] || { printf 'usage: wt invoke <hook>\n' >&2; return 1; }
+
+  local base
+  base="$(_wt_base)" || return 1
+  local hook_file="${base}/.wt/hooks/${hook}"
+
+  if [[ ! -f "$hook_file" ]]; then
+    printf 'error: hook not found: %s\n' "$hook_file" >&2; return 1
+  fi
+  if [[ ! -x "$hook_file" ]]; then
+    printf 'error: hook is not executable: %s\n' "$hook_file" >&2; return 1
+  fi
+
+  local branch wt_path
+  branch="$(git branch --show-current 2>/dev/null || printf '')"
+  wt_path="$(realpath "$(pwd)")"
+
+  ( cd "$wt_path" && WT_BRANCH="$branch" "$hook_file" )
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
 wt() {
@@ -406,6 +432,7 @@ wt() {
     extract) _wt_extract "$@" ;;
     copy)    _wt_copy    "$@" ;;
     link)    _wt_link    "$@" ;;
+    invoke)  _wt_invoke  "$@" ;;
     *)
       printf '%s\n' \
         "usage: wt <command> [args]" \
