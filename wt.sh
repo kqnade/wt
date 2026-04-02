@@ -44,6 +44,17 @@ _wt_require_git() {
     || { printf 'error: not a git repository\n' >&2; return 1; }
 }
 
+# Run a hook if it exists; sets WT_BRANCH in the hook environment.
+# Returns 0 if hook is absent or succeeds; returns hook's exit code otherwise.
+_wt_run_hook() {
+  local hook="$1" branch="${2:-}" wt_path="${3:-$(pwd)}"
+  local base hook_file
+  base="$(_wt_base 2>/dev/null)" || return 0   # best-effort; no repo = no hooks
+  hook_file="${base}/.wt/hooks/${hook}"
+  [[ -x "$hook_file" ]] || return 0
+  ( cd "$wt_path" && WT_BRANCH="$branch" "$hook_file" )
+}
+
 # Guard: must be in a linked worktree (not base)
 _wt_require_worktree() {
   _wt_in_worktree \
@@ -132,6 +143,9 @@ _wt_new() {
   local wt_path
   wt_path="$(dirname "$base_root")/$(basename "$base_root")@${dir_branch}"
 
+  # pre-new hook (non-zero exit cancels)
+  _wt_run_hook pre-new "$branch" "$base_root" || return 1
+
   # Conflict checks
   if [[ -e "$wt_path" ]]; then
     printf 'error: path already exists: %s\n' "$wt_path" >&2; return 1
@@ -142,6 +156,9 @@ _wt_new() {
 
   git worktree add "$wt_path" -b "$branch" || return 1
   printf '✓ worktree created: %s\n' "$wt_path"
+
+  # post-new hook
+  _wt_run_hook post-new "$branch" "$wt_path"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -216,6 +233,9 @@ _wt_del() {
   branch="$(git branch --show-current 2>/dev/null)" \
     || { printf 'error: cannot determine current branch\n' >&2; return 1; }
   wt_path="$(realpath "$(pwd)")"
+
+  # pre-del hook (non-zero exit cancels)
+  _wt_run_hook pre-del "$branch" "$wt_path" || return 1
 
   # Confirm unless -f
   if (( ! force )); then
