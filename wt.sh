@@ -32,9 +32,10 @@ _wt_branch_to_dir() {
 
 # Return the default branch name (origin/HEAD > wt.default-branch config)
 _wt_default_branch() {
-  git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null \
-    | sed 's|refs/remotes/origin/||' \
-    || git config wt.default-branch 2>/dev/null \
+  local ref
+  ref="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null)" \
+    && { printf '%s\n' "${ref#refs/remotes/origin/}"; return 0; }
+  git config wt.default-branch 2>/dev/null \
     || { printf 'error: cannot detect default branch; set wt.default-branch\n' >&2; return 1; }
 }
 
