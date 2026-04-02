@@ -51,6 +51,50 @@ _wt_require_worktree() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# wt ls
+# ─────────────────────────────────────────────────────────────────────────────
+_wt_ls() {
+  _wt_require_git || return 1
+
+  local full_path=0
+  [[ "${1:-}" == "--full-path" ]] && full_path=1
+
+  local current_real
+  current_real="$(realpath "$(pwd)" 2>/dev/null || pwd)"
+
+  local worktree_path is_first=1
+
+  while IFS= read -r line; do
+    if [[ "$line" == "worktree "* ]]; then
+      worktree_path="${line#worktree }"
+    elif [[ -z "$line" && -n "$worktree_path" ]]; then
+      local wt_real marker="" display
+
+      wt_real="$(realpath "$worktree_path" 2>/dev/null || printf '%s' "$worktree_path")"
+
+      if [[ "$wt_real" == "$current_real" ]]; then
+        if (( is_first )); then
+          marker=" [base]"
+        else
+          marker=" *"
+        fi
+      fi
+
+      if (( full_path )); then
+        printf '%s%s\n' "$worktree_path" "$marker"
+      else
+        display="$(basename "$worktree_path")"
+        [[ "$display" == *@* ]] && display="${display#*@}"
+        printf '%s%s\n' "$display" "$marker"
+      fi
+
+      is_first=0
+      worktree_path=""
+    fi
+  done < <(git worktree list --porcelain)
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
 wt() {
@@ -58,6 +102,7 @@ wt() {
   [[ -n "$cmd" ]] && shift
 
   case "$cmd" in
+    ls)      _wt_ls      "$@" ;;
     *)
       printf '%s\n' \
         "usage: wt <command> [args]" \
