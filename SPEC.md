@@ -118,8 +118,9 @@ wt use
 ```
 
 - 現在の worktree のブランチ名を取得: `git branch --show-current`
-- ベースパスを `_wt_base` で取得し `git -C "$(_wt_base)" checkout "$branch"` を実行
-- ベースが dirty な場合はエラーにする
+- ベースパスを `_wt_base` で取得し `git -C "$(_wt_base)" checkout --detach "$branch"` を実行
+- ベースが dirty な場合はエラーにする（staged・unstaged・untracked すべて含む）
+- **ベースは detached HEAD 状態になる**: git は同一ブランチを複数 worktree で同時に checkout できない制約があるため、`--detach` でブランチ参照を持たない状態で同コミットを指すことで回避する
 
 ### `wt extract`
 
@@ -132,9 +133,12 @@ wt extract
 
 - 実行前に現在のベースが dirty でないか確認（dirty ならエラー終了）
 - 現在のブランチ名を取得
-- `wt new {branch}` を実行
-- ベースをデフォルトブランチに戻す
-  - デフォルトブランチの取得: `git symbolic-ref refs/remotes/origin/HEAD | sed 's|refs/remotes/origin/||'`
+- **処理順（git 制約により順序が重要）**:
+  1. ベースを先にデフォルトブランチへ切り替える（`git checkout "$default_branch"`）
+     - git は現在 checkout 中のブランチを `worktree add` のターゲットにできないため、先に移る必要がある
+     - `worktree add` が失敗した場合はベースを元のブランチに戻してロールバック
+  2. `git worktree add "$wt_path" "$branch"` で worktree を追加
+- デフォルトブランチの取得: `git symbolic-ref refs/remotes/origin/HEAD`
   - origin が未設定の場合は `wt.default-branch` 設定にフォールバック、それもなければエラー
 - `post-new` フックを実行する。`pre-new` フック・AI 自動起動は**実行しない**
   - ブランチはすでに存在し作業途中の状態であるため、新規作成時と異なりキャンセル用 guard や AI 起動は不要
