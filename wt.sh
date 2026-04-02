@@ -332,7 +332,10 @@ _wt_use() {
     return 1
   fi
 
-  git -C "$base" checkout "$branch"
+  # Use --detach: git forbids the same branch being checked out in two
+  # worktrees simultaneously.  Detached HEAD puts the base at the same
+  # commit without holding a branch ref, letting the worktree keep it.
+  git -C "$base" checkout --detach "$branch"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
