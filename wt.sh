@@ -273,6 +273,29 @@ _wt_home() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# wt use
+# ─────────────────────────────────────────────────────────────────────────────
+_wt_use() {
+  _wt_require_git      || return 1
+  _wt_require_worktree || return 1
+
+  local branch
+  branch="$(git branch --show-current 2>/dev/null)"
+  [[ -n "$branch" ]] || { printf 'error: detached HEAD state\n' >&2; return 1; }
+
+  local base
+  base="$(_wt_base)" || return 1
+
+  if ! git -C "$base" diff --quiet 2>/dev/null \
+    || ! git -C "$base" diff --cached --quiet 2>/dev/null; then
+    printf 'error: base repository has uncommitted changes; stash or commit first\n' >&2
+    return 1
+  fi
+
+  git -C "$base" checkout "$branch"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
 wt() {
@@ -285,6 +308,7 @@ wt() {
     cd)      _wt_cd      "$@" ;;
     del)     _wt_del     "$@" ;;
     home)    _wt_home    "$@" ;;
+    use)     _wt_use     "$@" ;;
     *)
       printf '%s\n' \
         "usage: wt <command> [args]" \
