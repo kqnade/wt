@@ -95,6 +95,56 @@ _wt_ls() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# wt new
+# ─────────────────────────────────────────────────────────────────────────────
+_wt_new() {
+  _wt_require_git || return 1
+
+  local branch=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --ai|--no-ai) ;;  # handled in Phase 3
+      -*)  printf 'error: unknown option: %s\n' "$1" >&2; return 1 ;;
+      *)
+        if [[ -z "$branch" ]]; then
+          branch="$1"
+        else
+          printf 'error: unexpected argument: %s\n' "$1" >&2; return 1
+        fi
+        ;;
+    esac
+    shift
+  done
+
+  [[ -z "$branch" ]] && branch="wip-$RANDOM"
+
+  # Validate branch name
+  git check-ref-format --branch "$branch" > /dev/null 2>&1 \
+    || { printf 'error: invalid branch name: %s\n' "$branch" >&2; return 1; }
+
+  local dir_branch
+  dir_branch="$(_wt_branch_to_dir "$branch")"
+
+  local base_root
+  base_root="$(_wt_base)" || return 1
+
+  local wt_path
+  wt_path="$(dirname "$base_root")/$(basename "$base_root")@${dir_branch}"
+
+  # Conflict checks
+  if [[ -e "$wt_path" ]]; then
+    printf 'error: path already exists: %s\n' "$wt_path" >&2; return 1
+  fi
+  if git rev-parse --verify "$branch" > /dev/null 2>&1; then
+    printf 'error: branch already exists: %s\n' "$branch" >&2; return 1
+  fi
+
+  git worktree add "$wt_path" -b "$branch" || return 1
+  printf '✓ worktree created: %s\n' "$wt_path"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
 wt() {
@@ -102,6 +152,7 @@ wt() {
   [[ -n "$cmd" ]] && shift
 
   case "$cmd" in
+    new)     _wt_new     "$@" ;;
     ls)      _wt_ls      "$@" ;;
     *)
       printf '%s\n' \
