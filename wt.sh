@@ -257,7 +257,13 @@ _wt_del() {
   _wt_require_worktree || return 1
 
   local force=0
-  [[ "${1:-}" == "-f" ]] && force=1
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -f) force=1 ;;
+      *)  printf 'error: unknown option: %s\n' "$1" >&2; return 1 ;;
+    esac
+    shift
+  done
 
   local branch wt_path
   branch="$(git branch --show-current 2>/dev/null)" \
