@@ -203,6 +203,56 @@ _wt_cd() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# wt del
+# ─────────────────────────────────────────────────────────────────────────────
+_wt_del() {
+  _wt_require_git    || return 1
+  _wt_require_worktree || return 1
+
+  local force=0
+  [[ "${1:-}" == "-f" ]] && force=1
+
+  local branch wt_path
+  branch="$(git branch --show-current 2>/dev/null)" \
+    || { printf 'error: cannot determine current branch\n' >&2; return 1; }
+  wt_path="$(realpath "$(pwd)")"
+
+  # Confirm unless -f
+  if (( ! force )); then
+    printf 'delete worktree "%s" and branch "%s"? [y/N] ' \
+      "$(basename "$wt_path")" "$branch"
+    local ans
+    read -r ans
+    [[ "$ans" =~ ^[Yy]$ ]] || { printf 'cancelled\n'; return 0; }
+  fi
+
+  local base
+  base="$(_wt_base)" || return 1
+  builtin cd "$base"
+
+  if (( force )); then
+    # -f: force both git worktree remove and git branch -D
+    git worktree remove --force "$wt_path" || return 1
+    git branch -D "$branch"
+  else
+    git worktree remove "$wt_path" || return 1
+    git branch -d "$branch" || return 1
+  fi
+
+  printf '✓ deleted: %s (branch: %s)\n' "$(basename "$wt_path")" "$branch"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# wt home
+# ─────────────────────────────────────────────────────────────────────────────
+_wt_home() {
+  _wt_require_git || return 1
+  local base
+  base="$(_wt_base)" || return 1
+  builtin cd "$base"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
 wt() {
@@ -213,6 +263,8 @@ wt() {
     new)     _wt_new     "$@" ;;
     ls)      _wt_ls      "$@" ;;
     cd)      _wt_cd      "$@" ;;
+    del)     _wt_del     "$@" ;;
+    home)    _wt_home    "$@" ;;
     *)
       printf '%s\n' \
         "usage: wt <command> [args]" \
