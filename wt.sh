@@ -125,11 +125,12 @@ _wt_ls() {
 _wt_new() {
   _wt_require_git || return 1
 
-  local branch=""
+  local branch="" ai=0 no_ai=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --ai|--no-ai) ;;  # handled in Phase 3
+      --ai)    ai=1 ;;
+      --no-ai) no_ai=1 ;;
       -*)  printf 'error: unknown option: %s\n' "$1" >&2; return 1 ;;
       *)
         if [[ -z "$branch" ]]; then
@@ -173,6 +174,20 @@ _wt_new() {
 
   # post-new hook
   _wt_run_hook post-new "$branch" "$wt_path"
+
+  # AI startup: --ai > wt.ai config > --no-ai
+  local use_ai=0
+  if (( ai )); then
+    use_ai=1
+  elif (( ! no_ai )); then
+    [[ "$(_wt_config wt.ai false)" == "true" ]] && use_ai=1
+  fi
+
+  if (( use_ai )); then
+    local ai_cmd
+    ai_cmd="$(_wt_config wt.ai-cmd claude)"
+    ( cd "$wt_path" && exec "$ai_cmd" )
+  fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
