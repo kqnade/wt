@@ -495,7 +495,8 @@ _wt_clean() {
         # 3. locally merged into default branch
         if (( ! candidate )) && [[ -n "$branch" && -n "$default_branch" ]]; then
           if git branch --merged "$default_branch" 2>/dev/null \
-              | grep -qE "^\*?[[:space:]]+${branch}$"; then
+              | sed 's/^[[:space:]*]*//' \
+              | grep -qxF "$branch"; then
             candidate=1
           fi
         fi
