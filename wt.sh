@@ -296,6 +296,52 @@ _wt_use() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# wt extract
+# ─────────────────────────────────────────────────────────────────────────────
+_wt_extract() {
+  _wt_require_git || return 1
+
+  if _wt_in_worktree; then
+    printf 'error: wt extract must be run from the base repository\n' >&2; return 1
+  fi
+
+  # dirty check before the two-step operation (wt new → git checkout default)
+  if ! git diff --quiet 2>/dev/null \
+    || ! git diff --cached --quiet 2>/dev/null; then
+    printf 'error: base repository has uncommitted changes; stash or commit first\n' >&2
+    return 1
+  fi
+
+  local branch
+  branch="$(git branch --show-current 2>/dev/null)"
+  [[ -n "$branch" ]] || { printf 'error: detached HEAD state\n' >&2; return 1; }
+
+  local default_branch
+  default_branch="$(_wt_default_branch)" || return 1
+
+  if [[ "$branch" == "$default_branch" ]]; then
+    printf 'error: cannot extract the default branch (%s)\n' "$default_branch" >&2; return 1
+  fi
+
+  local dir_branch base_root wt_path
+  dir_branch="$(_wt_branch_to_dir "$branch")"
+  base_root="$(_wt_base)" || return 1
+  wt_path="$(dirname "$base_root")/$(basename "$base_root")@${dir_branch}"
+
+  if [[ -e "$wt_path" ]]; then
+    printf 'error: path already exists: %s\n' "$wt_path" >&2; return 1
+  fi
+
+  # Use existing branch (no -b)
+  git worktree add "$wt_path" "$branch" || return 1
+  printf '✓ worktree created: %s\n' "$wt_path"
+
+  git checkout "$default_branch" || return 1
+
+  _wt_run_hook post-new "$branch" "$wt_path"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
 wt() {
@@ -309,6 +355,7 @@ wt() {
     del)     _wt_del     "$@" ;;
     home)    _wt_home    "$@" ;;
     use)     _wt_use     "$@" ;;
+    extract) _wt_extract "$@" ;;
     *)
       printf '%s\n' \
         "usage: wt <command> [args]" \
