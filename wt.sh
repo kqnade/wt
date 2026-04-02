@@ -434,6 +434,102 @@ _wt_invoke() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# wt clean
+# ─────────────────────────────────────────────────────────────────────────────
+_wt_clean() {
+  _wt_require_git || return 1
+
+  local dry_run=0
+  [[ "${1:-}" == "--dry-run" ]] && dry_run=1
+
+  local default_branch
+  default_branch="$(_wt_default_branch 2>/dev/null || printf '')"
+
+  local -a cand_paths=() cand_branches=()
+  local worktree_path branch prunable is_first=1
+
+  while IFS= read -r line; do
+    if [[ "$line" == "worktree "* ]]; then
+      worktree_path="${line#worktree }"
+      branch=""
+      prunable=0
+    elif [[ "$line" == "branch "* ]]; then
+      branch="${line#branch refs/heads/}"
+    elif [[ "$line" == "prunable"* ]]; then
+      prunable=1
+    elif [[ -z "$line" && -n "$worktree_path" ]]; then
+      if (( ! is_first )); then
+        local candidate=0
+
+        # 1. prunable (git-internal)
+        (( prunable )) && candidate=1
+
+        # 2. merged PR via gh
+        if (( ! candidate )) && [[ -n "$branch" ]] && command -v gh > /dev/null 2>&1; then
+          if gh pr list --state merged --json headRefName --jq '.[].headRefName' 2>/dev/null \
+              | grep -qxF "$branch"; then
+            candidate=1
+          fi
+        fi
+
+        # 3. locally merged into default branch
+        if (( ! candidate )) && [[ -n "$branch" && -n "$default_branch" ]]; then
+          if git branch --merged "$default_branch" 2>/dev/null \
+              | grep -qE "^\*?[[:space:]]+${branch}$"; then
+            candidate=1
+          fi
+        fi
+
+        if (( candidate )); then
+          cand_paths+=("$worktree_path")
+          cand_branches+=("$branch")
+        fi
+      fi
+      is_first=0
+      worktree_path=""
+      branch=""
+      prunable=0
+    fi
+  done < <(git worktree list --porcelain)
+
+  if (( ${#cand_paths[@]} == 0 )); then
+    printf 'nothing to clean\n'; return 0
+  fi
+
+  printf 'candidates for removal:\n'
+  local i
+  for (( i=0; i<${#cand_paths[@]}; i++ )); do
+    printf '  %s  (branch: %s)\n' \
+      "$(basename "${cand_paths[$i]}")" "${cand_branches[$i]:-detached}"
+  done
+
+  if (( dry_run )); then
+    printf '(dry-run: no changes made)\n'; return 0
+  fi
+
+  local confirm
+  confirm="$(_wt_config wt.confirm true)"
+
+  for (( i=0; i<${#cand_paths[@]}; i++ )); do
+    local p="${cand_paths[$i]}" b="${cand_branches[$i]}"
+    if [[ "$confirm" != "false" ]]; then
+      printf 'remove %s? [y/N] ' "$(basename "$p")"
+      local ans
+      read -r ans
+      [[ "$ans" =~ ^[Yy]$ ]] || { printf 'skipped\n'; continue; }
+    fi
+    git worktree remove "$p" 2>/dev/null \
+      || git worktree remove --force "$p" 2>/dev/null \
+      || { printf 'error: failed to remove worktree: %s\n' "$p" >&2; continue; }
+    if [[ -n "$b" ]]; then
+      git branch -d "$b" 2>/dev/null \
+        || printf 'warning: branch %s not fully merged; skipping branch delete\n' "$b" >&2
+    fi
+    printf '✓ removed: %s\n' "$(basename "$p")"
+  done
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
 wt() {
@@ -451,6 +547,7 @@ wt() {
     copy)    _wt_copy    "$@" ;;
     link)    _wt_link    "$@" ;;
     invoke)  _wt_invoke  "$@" ;;
+    clean)   _wt_clean   "$@" ;;
     *)
       printf '%s\n' \
         "usage: wt <command> [args]" \
