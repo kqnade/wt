@@ -107,7 +107,8 @@ _wt_ls() {
       fi
 
       if (( full_path )); then
-        printf '%s%s\n' "$worktree_path" "$marker"
+        # Use tab to separate path from marker so paths with spaces stay intact
+        printf '%s\t%s\n' "$worktree_path" "$marker"
       else
         display="$(basename "$worktree_path")"
         [[ "$display" == *@* ]] && display="${display#*@}"
@@ -206,13 +207,13 @@ _wt_cd() {
     local selected
     selected="$(_wt_ls --full-path | fzf --prompt='worktree> ')"
     [[ -z "$selected" ]] && return 0
-    builtin cd "${selected%% *}"
+    builtin cd "${selected%%$'\t'*}"
   else
     # 3-stage matching: exact → single prefix → multiple prefix (error)
     local -a paths=()
     local line
     while IFS= read -r line; do
-      paths+=("${line%% *}")
+      paths+=("${line%%$'\t'*}")
     done < <(_wt_ls --full-path)
 
     local exact_match=""
