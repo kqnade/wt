@@ -374,11 +374,16 @@ _wt_extract() {
     printf 'error: path already exists: %s\n' "$wt_path" >&2; return 1
   fi
 
-  # Use existing branch (no -b)
-  git worktree add "$wt_path" "$branch" || return 1
-  printf '✓ worktree created: %s\n' "$wt_path"
-
+  # Switch base off the branch FIRST: git forbids adding a worktree for a
+  # branch that is still checked out in the current (base) checkout.
   git checkout "$default_branch" || return 1
+
+  git worktree add "$wt_path" "$branch" || {
+    # Roll back: restore the branch in base so the user isn't left on default
+    git checkout "$branch" 2>/dev/null
+    return 1
+  }
+  printf '✓ worktree created: %s\n' "$wt_path"
 
   _wt_run_hook post-new "$branch" "$wt_path"
 }
