@@ -38,6 +38,20 @@ _wt_default_branch() {
     || { printf 'error: cannot detect default branch; set wt.default-branch\n' >&2; return 1; }
 }
 
+# Read a wt.* config value: local git config > ~/.config/wt/config > global git config
+_wt_config() {
+  local key="$1" default="${2:-}"
+  local val
+  val="$(git config --local "$key" 2>/dev/null)" && { printf '%s\n' "$val"; return 0; }
+  local cfg_file="${HOME}/.config/wt/config"
+  if [[ -f "$cfg_file" ]]; then
+    val="$(git config -f "$cfg_file" "$key" 2>/dev/null)" && { printf '%s\n' "$val"; return 0; }
+  fi
+  val="$(git config --global "$key" 2>/dev/null)" && { printf '%s\n' "$val"; return 0; }
+  [[ -n "$default" ]] && printf '%s\n' "$default"
+  return 1
+}
+
 # Guard: must be in a git repo
 _wt_require_git() {
   git rev-parse --git-dir > /dev/null 2>&1 \
@@ -237,13 +251,17 @@ _wt_del() {
   # pre-del hook (non-zero exit cancels)
   _wt_run_hook pre-del "$branch" "$wt_path" || return 1
 
-  # Confirm unless -f
+  # Confirm unless -f or wt.confirm=false
   if (( ! force )); then
-    printf 'delete worktree "%s" and branch "%s"? [y/N] ' \
-      "$(basename "$wt_path")" "$branch"
-    local ans
-    read -r ans
-    [[ "$ans" =~ ^[Yy]$ ]] || { printf 'cancelled\n'; return 0; }
+    local confirm
+    confirm="$(_wt_config wt.confirm true)"
+    if [[ "$confirm" != "false" ]]; then
+      printf 'delete worktree "%s" and branch "%s"? [y/N] ' \
+        "$(basename "$wt_path")" "$branch"
+      local ans
+      read -r ans
+      [[ "$ans" =~ ^[Yy]$ ]] || { printf 'cancelled\n'; return 0; }
+    fi
   fi
 
   local base
