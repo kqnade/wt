@@ -89,12 +89,13 @@ _wt_ls() {
   current_real="$(realpath "$(pwd)" 2>/dev/null || pwd)"
 
   local worktree_path is_first=1
+  local wt_real marker display
 
   while IFS= read -r line; do
     if [[ "$line" == "worktree "* ]]; then
       worktree_path="${line#worktree }"
     elif [[ -z "$line" && -n "$worktree_path" ]]; then
-      local wt_real marker="" display
+      marker=""
 
       wt_real="$(realpath "$worktree_path" 2>/dev/null || printf '%s' "$worktree_path")"
 
