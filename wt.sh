@@ -82,8 +82,11 @@ _wt_require_worktree() {
 _wt_ls() {
   _wt_require_git || return 1
 
-  local full_path=0
-  [[ "${1:-}" == "--full-path" ]] && full_path=1
+  local full_path=0 for_fzf=0
+  case "${1:-}" in
+    --full-path) full_path=1 ;;
+    --fzf)       for_fzf=1  ;;
+  esac
 
   local current_real
   current_real="$(realpath "$(pwd)" 2>/dev/null || pwd)"
@@ -107,12 +110,16 @@ _wt_ls() {
         fi
       fi
 
+      display="$(basename "$worktree_path")"
+      [[ "$display" == *@* ]] && display="${display#*@}"
+
       if (( full_path )); then
         # Use tab to separate path from marker so paths with spaces stay intact
         printf '%s\t%s\n' "$worktree_path" "$marker"
+      elif (( for_fzf )); then
+        # "display marker<TAB>path" — fzf shows col-1, cd uses col-2
+        printf '%s%s\t%s\n' "$display" "$marker" "$worktree_path"
       else
-        display="$(basename "$worktree_path")"
-        [[ "$display" == *@* ]] && display="${display#*@}"
         printf '%s%s\n' "$display" "$marker"
       fi
 
@@ -206,9 +213,25 @@ _wt_cd() {
     command -v fzf > /dev/null 2>&1 \
       || { printf 'error: fzf is required for interactive selection\n' >&2; return 1; }
     local selected
-    selected="$(_wt_ls --full-path | fzf --prompt='worktree> ')"
+    selected="$(_wt_ls --fzf | fzf \
+      --prompt='worktree > ' \
+      --height=~40% \
+      --reverse \
+      --border \
+      --with-nth=1 \
+      --delimiter=$'\t' \
+      --preview='
+        branch=$(git -C "{2}" branch --show-current 2>/dev/null)
+        echo "🌿 Branch: $branch"
+        echo ""
+        git -C "{2}" -c color.status=always status -sb 2>/dev/null
+        echo ""
+        echo "📝 Recent commits:"
+        git -C "{2}" log --oneline -5 --color=always 2>/dev/null
+      ' \
+      --preview-window='right:50%:wrap')"
     [[ -z "$selected" ]] && return 0
-    builtin cd "${selected%%$'\t'*}"
+    builtin cd "${selected#*$'\t'}"
   else
     # 3-stage matching: exact → single prefix → multiple prefix (error)
     local -a paths=()
