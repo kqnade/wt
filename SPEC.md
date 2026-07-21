@@ -31,7 +31,7 @@ ha のシンプルさ + gtr の AI 起動をいいとこ取りしたツール。
 
 ## コマンド一覧
 
-### `wt new [branch] [--ai] [--no-ai]`
+### `wt new [branch] [--prompt] [--cd] [--ai] [--no-ai]`
 
 worktree を作成する。
 
@@ -39,7 +39,12 @@ worktree を作成する。
 wt new feature-x        # 作成のみ
 wt new feature-x --ai   # 作成 + claude 起動
 wt new                   # branch 名省略 → wip-$RANDOM
+wt new --prompt --cd     # 対話入力した branch を作成して移動
 ```
+
+- `--prompt` は stderr にプロンプトを表示して標準入力からブランチ名を1行読む。空入力・EOFはエラー
+- `--prompt` と位置引数のブランチ指定は併用不可
+- `--cd` は作成と `post-new` hook の完了後、source 元のシェルを新しい worktree へ移動
 
 処理順:
 1. ベースリポジトリのルートを取得（`git rev-parse --show-toplevel`）
@@ -49,6 +54,15 @@ wt new                   # branch 名省略 → wip-$RANDOM
 5. `git worktree add "$wt_path" -b "$branch"` を実行
 6. hooks の `post-new` を実行
 7. `--ai` または config で `wt.ai=true` の場合 `claude` を起動
+
+### `wt path [branch]` / `wt home-path`
+
+cmux・Agent Mail 等の machine consumer 向けに、装飾なしの絶対パスだけを stdout に出力する。
+
+- `wt path <branch>`: `git worktree list --porcelain` から完全一致するローカルブランチの worktree を返す
+- `wt path`: 現在の checkout のルートを返す（サブディレクトリからも利用可）
+- `wt home-path`: base / linked worktree のどちらからでも canonical base checkout を返す
+- 検索失敗や引数エラーの説明は stderr に出力し、非ゼロ終了する
 
 ### `wt cd`
 

@@ -135,12 +135,14 @@ _wt_ls() {
 _wt_new() {
   _wt_require_git || return 1
 
-  local branch="" ai=0 no_ai=0
+  local branch="" ai=0 no_ai=0 prompt=0 change_dir=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --ai)    ai=1 ;;
       --no-ai) no_ai=1 ;;
+      --prompt) prompt=1 ;;
+      --cd)     change_dir=1 ;;
       -*)  printf 'error: unknown option: %s\n' "$1" >&2; return 1 ;;
       *)
         if [[ -z "$branch" ]]; then
@@ -152,6 +154,19 @@ _wt_new() {
     esac
     shift
   done
+
+  if (( prompt )); then
+    if [[ -n "$branch" ]]; then
+      printf 'error: --prompt cannot be used with a branch argument\n' >&2
+      return 1
+    fi
+    printf 'branch name: ' >&2
+    IFS= read -r branch || {
+      printf '\nerror: branch input cancelled\n' >&2
+      return 1
+    }
+    [[ -n "$branch" ]] || { printf 'error: branch name must not be empty\n' >&2; return 1; }
+  fi
 
   [[ -z "$branch" ]] && branch="wip-$RANDOM"
 
@@ -185,6 +200,11 @@ _wt_new() {
   # post-new hook
   _wt_run_hook post-new "$branch" "$wt_path"
 
+  # wt is sourced, so this changes the caller's current shell directory.
+  if (( change_dir )); then
+    builtin cd "$wt_path" || return 1
+  fi
+
   # AI startup: --ai > wt.ai config > --no-ai
   local use_ai=0
   if (( ai )); then
@@ -198,6 +218,47 @@ _wt_new() {
     ai_cmd="$(_wt_config wt.ai-cmd claude)"
     ( cd "$wt_path" && exec "$ai_cmd" )
   fi
+}
+
+# Print a worktree path without decoration for scripts and integrations.
+# With no argument, print the worktree containing cwd.
+_wt_path() {
+  _wt_require_git || return 1
+
+  local target="${1:-}" worktree_path="" branch="" current_real
+  [[ $# -le 1 ]] || { printf 'usage: wt path [branch]\n' >&2; return 1; }
+  current_real="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+  current_real="$(realpath "$current_real" 2>/dev/null || printf '%s' "$current_real")"
+
+  while IFS= read -r line; do
+    if [[ "$line" == "worktree "* ]]; then
+      worktree_path="${line#worktree }"
+      branch=""
+    elif [[ "$line" == "branch refs/heads/"* ]]; then
+      branch="${line#branch refs/heads/}"
+    elif [[ -z "$line" && -n "$worktree_path" ]]; then
+      if { [[ -n "$target" && "$branch" == "$target" ]] ||
+           [[ -z "$target" && "$(realpath "$worktree_path" 2>/dev/null || printf '%s' "$worktree_path")" == "$current_real" ]]; }; then
+        realpath "$worktree_path" 2>/dev/null || printf '%s\n' "$worktree_path"
+        return 0
+      fi
+      worktree_path=""
+      branch=""
+    fi
+  done < <(git worktree list --porcelain)
+
+  if [[ -n "$target" ]]; then
+    printf 'error: no worktree for branch: %s\n' "$target" >&2
+  else
+    printf 'error: current directory is not inside a registered worktree\n' >&2
+  fi
+  return 1
+}
+
+# Print the canonical base checkout path without decoration.
+_wt_home_path() {
+  _wt_require_git || return 1
+  _wt_base
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -603,6 +664,8 @@ wt() {
 
   case "$cmd" in
     new)     _wt_new     "$@" ;;
+    path)    _wt_path    "$@" ;;
+    home-path) _wt_home_path "$@" ;;
     ls)      _wt_ls      "$@" ;;
     cd)      _wt_cd      "$@" ;;
     del)     _wt_del     "$@" ;;
@@ -618,7 +681,10 @@ wt() {
         "usage: wt <command> [args]" \
         "" \
         "commands:" \
-        "  new [branch] [--ai|--no-ai]  create a new worktree" \
+        "  new [branch] [--prompt] [--cd] [--ai|--no-ai]" \
+        "                                 create a new worktree" \
+        "  path [branch]                  print a worktree path" \
+        "  home-path                      print the base repository path" \
         "  ls [--full-path]             list worktrees for this repo" \
         "  cd [branch]                  cd into a worktree (fzf if no arg)" \
         "  del [-f]                     delete current worktree and branch" \

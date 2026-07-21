@@ -27,6 +27,12 @@ zinit snippet "https://raw.githubusercontent.com/kqnade/wt/main/wt.sh"
 | `fzf` | `wt cd` のみ | 対話選択 |
 | `gh` | `wt clean` のみ | マージ済み PR の検出 |
 
+## テスト
+
+```sh
+zsh tests/wt_test.zsh
+```
+
 ## ディレクトリ規則
 
 ```
@@ -39,7 +45,7 @@ zinit snippet "https://raw.githubusercontent.com/kqnade/wt/main/wt.sh"
 
 ## コマンド
 
-### `wt new [branch] [--ai|--no-ai]`
+### `wt new [branch] [--prompt] [--cd] [--ai|--no-ai]`
 
 新しい worktree を作成します。
 
@@ -47,6 +53,20 @@ zinit snippet "https://raw.githubusercontent.com/kqnade/wt/main/wt.sh"
 wt new feature-x        # ブランチ指定して作成
 wt new feature-x --ai   # 作成後に AI（claude）を起動
 wt new                   # ブランチ名省略 → wip-$RANDOM
+wt new --prompt --cd     # ブランチ名を入力して、作成先へ移動
+```
+
+`--prompt` の入力プロンプトは stderr に出力されます。空入力や EOF は作成せずエラーになります。
+`--cd` は `wt.sh` を source した現在のシェルを、作成した worktree へ移動します。
+
+### `wt path [branch]` / `wt home-path`
+
+連携ツール向けに、装飾なしの絶対パスだけを stdout へ出力します。
+
+```sh
+wt path issue/123  # 指定ブランチの worktree
+wt path            # 現在いる worktree
+wt home-path       # canonical base checkout（base/worktree のどちらからでも同じ）
 ```
 
 ### `wt cd [branch]`
